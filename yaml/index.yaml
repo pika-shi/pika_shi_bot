@@ -1,0 +1,12 @@
+indexes:
+
+- kind: TweetModel
+  properties:
+  - name: id
+  - name: tweet
+
+- kind: WordModel
+  properties:
+  - name: word
+  - name: id_list
+  - name: count
