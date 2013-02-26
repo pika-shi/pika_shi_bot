@@ -1,7 +1,7 @@
-cron: 
+cron:
 - description: get_tweet
   url: /get_tweet.*
-  schedule: every 3 minutes
+  schedule: every 2 minutes
 
 - description: post_tweet
   url: /post_tweet.*
