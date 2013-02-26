@@ -43,15 +43,22 @@ class WordModel(db.Model):
   id_list = db.ListProperty(item_type=long,default=[]) # その単語が含まれるtweetのidのリスト
   count = db.IntegerProperty(default=0) # その単語が含まれるtweetの数
 
+class TmpWordModel(db.Model):
+  word = db.StringProperty() # 単語
+  id_list = db.ListProperty(item_type=long,default=[]) # その単語が含まれるtweetのidのリスト
+  count = db.IntegerProperty(default=0) # その単語が含まれるtweetの数
+
 # 正規表現パターン
 p1 = 'ぴか(し|に(い|ぃ))(いけめん|イケメン|はんさむ|ハンサム)'
 p2 = 'ぴか(し|に(い|ぃ))かわいい'
 p3 = 'ぴか(し|に(い|ぃ))(ど|ド)(Ｍ|M|えむ|エム)'
+p4 = 'ぴか(し|に(い|ぃ))(メンサ|めんさ|MENSA)'
 
 # compile
 re1 = re.compile(p1)
 re2 = re.compile(p2)
 re3 = re.compile(p3)
+re4 = re.compile(p4)
 
 # TL取得
 TL = api.GetFriendsTimeline()
@@ -73,13 +80,20 @@ for tweet in TL:
         # reply
         if re1.scanner(tweet.text.encode('utf-8')).search() != None:
             postmsg = '@'.decode("utf-8") + tweet.user.screen_name.decode("utf-8") + choice([' ｷﾘｯ',' さんくす(・∀・)',' そんなことないよ！',' うれしいでござる',' 言うまでもないがなｗ']).decode("utf-8")
-            bot_api.PostUpdate(postmsg)
+            bot_api.PostUpdate(status=postmsg, in_reply_to_status_id=tweet.id)
         if re2.scanner(tweet.text.encode('utf-8')).search() != None:
             postmsg = '@'.decode("utf-8") + tweet.user.screen_name.decode("utf-8") + choice([' てへっ',' (´ω`)',' 君には負けるぜ(ｷﾘｯ',' まあね',' どこがやｗ']).decode("utf-8")
-            bot_api.PostUpdate(postmsg)
+            bot_api.PostUpdate(status=postmsg, in_reply_to_status_id=tweet.id)
         if re3.scanner(tweet.text.encode('utf-8')).search() != None:
             postmsg = '@'.decode("utf-8") + tweet.user.screen_name.decode("utf-8") + choice([' ばれてますやんｗ',' もっといじめて！',' ギクッ']).decode("utf-8")
-            bot_api.PostUpdate(postmsg)
+            bot_api.PostUpdate(status=postmsg, in_reply_to_status_id=tweet.id)
+        if re4.scanner(tweet.text.encode('utf-8')).search() != None:
+            postmsg = '@'.decode("utf-8") + tweet.user.screen_name.decode("utf-8") + choice([' おいやめろ笑',' みんなには内緒やで']).decode("utf-8")
+            bot_api.PostUpdate(status=postmsg, in_reply_to_status_id=tweet.id)
+        # にせほ機能
+        if tweet.user.screen_name == u'nisehorn' and tweet.text == u'にせほー':
+            postniseho = '@nisehorn にせほー'.decode("utf-8")
+            bot_api.PostUpdate(status=postniseho, in_reply_to_status_id=tweet.id)
         # DBに登録
         tweetmodel = TweetModel(id=tweet.id, tweet=tweet.text)
         tweetmodel.put()
@@ -91,7 +105,7 @@ for tweet in TL:
             if m.feature.split(',')[0] == u"名詞" and m.feature.split(',')[len(m.feature.split(','))-1] != u"*" and len(m.surface) >= 2 and not remove_stopwords(m.surface):
                 # wordがDBに登録されていない場合
                 if WordModel.all().filter('word =', m.surface).get() == None:
-                    # DBに登録 
+                    # DBに登録
                     wordmodel = WordModel(word=m.surface)
                 else:
                     # wordをfetchする
@@ -103,3 +117,39 @@ for tweet in TL:
                 wordmodel.id_list.append(tweet.id)
                 wordmodel.count = int(wordmodel.count)+1
                 wordmodel.put()
+
+                # wordがDBに登録されていない場合
+                if TmpWordModel.all().filter('word =', m.surface).get() == None:
+                    # DBに登録
+                    tmpwordmodel = TmpWordModel(word=m.surface)
+                else:
+                    # wordをfetchする
+                    tmpwordmodel = TmpWordModel.all().filter('word =', m.surface).get()
+                    # 同じtweetに複数出てくるwordは除去
+                    if tweet.id in tmpwordmodel.id_list:
+                        continue
+                # DBを更新
+                tmpwordmodel.id_list.append(tweet.id)
+                tmpwordmodel.count = int(tmpwordmodel.count)+1
+                tmpwordmodel.put()
+
+# countの最大値を取得
+max = TmpWordModel.all().order('-count').get().count
+
+# 2分で5回以上同じ単語が出た場合
+if max >= 5:
+    # 最頻出単語の検索
+    tmpwordmodels = TmpWordModel.all().filter('count =', max)
+
+    # 最頻出単語を含むtweetのidのリストを生成
+    word_list = []
+    for tmpwordmodel in tmpwordmodels:
+        word_list.extend(tmpwordmodel.word)
+
+    word = random.choice(word_list)
+    tweet = word + 'なん？'.decode("utf-8")
+    bot_api.PostUpdate(tweet)
+
+# TweetModel,WordModelのエンティティを削除
+db.delete(TmpWordModel.all())
+
